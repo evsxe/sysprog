@@ -103,11 +103,28 @@ static int partition(int *array, int left, int right) {
 }
 
 // Perform quicksort on the array using coroutines
-static void quick_sort(int *array, int left, int right, struct my_context *ctx) {
-    if (left < right) {
+void quick_sort(int *array, int left, int right, struct my_context *ctx) {
+    int stack[right - left + 1];
+    int top = -1;
+
+    stack[++top] = left;
+    stack[++top] = right;
+
+    while (top >= 0) {
+        right = stack[top--];
+        left = stack[top--];
+
         int pi = partition(array, left, right);
-        quick_sort(array, left, pi - 1, ctx);
-        quick_sort(array, pi + 1, right, ctx);
+
+        if (pi - 1 > left) {
+            stack[++top] = left;
+            stack[++top] = pi - 1;
+        }
+
+        if (pi + 1 < right) {
+            stack[++top] = pi + 1;
+            stack[++top] = right;
+        }
 
         if (is_exceed(ctx)) {
             stop_timer(ctx);
