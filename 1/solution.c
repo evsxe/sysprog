@@ -67,6 +67,9 @@ static void calculate_time(struct my_context *ctx) {
         diff_sec--;
         diff_nsec += 1000000000;
     }
+
+    ctx->sec_total = diff_sec;
+    ctx->nsec_total = diff_nsec;
 }
 
 // Check if the runtime for the context is exceeded
@@ -78,14 +81,14 @@ static bool is_exceed(struct my_context *ctx) {
 }
 
 // Swap two integers
-void swap(int *a, int *b) {
+static void swap(int *a, int *b) {
     int t = *a;
     *a = *b;
     *b = t;
 }
 
 // Partition the array for quicksort
-int partition(int *array, int left, int right) {
+static int partition(int *array, int left, int right) {
     int pivot = array[right];
     int i = (left - 1);
 
@@ -100,7 +103,7 @@ int partition(int *array, int left, int right) {
 }
 
 // Perform quicksort on the array using coroutines
-void quick_sort(int *array, int left, int right, struct my_context *ctx) {
+static void quick_sort(int *array, int left, int right, struct my_context *ctx) {
     if (left < right) {
         int pi = partition(array, left, right);
         quick_sort(array, left, pi - 1, ctx);
@@ -171,7 +174,8 @@ static int coroutine_func_f(void *context) {
     return 0;
 }
 
-int merge(int **data, int *size, int *idx, int cnt) {
+// Merge the sorted arrays
+static int merge(int **data, int *size, int *idx, int cnt) {
     int min_idx = -1;
     int curr_min = INT_MAX;
     for (int i = 0; i < cnt; ++i) {
