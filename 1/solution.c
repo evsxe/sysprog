@@ -5,7 +5,6 @@
 #include <limits.h>
 #include "libcoro.h"
 
-// Structure to hold the context information
 struct my_context {
     char *name;
     char **file_list;
@@ -68,9 +67,6 @@ static void calculate_time(struct my_context *ctx) {
         diff_sec--;
         diff_nsec += 1000000000;
     }
-
-    ctx->sec_total += diff_sec;
-    ctx->nsec_total += diff_nsec;
 }
 
 // Check if the runtime for the context is exceeded
@@ -83,49 +79,32 @@ static bool is_exceed(struct my_context *ctx) {
 
 // Swap two integers
 void swap(int *a, int *b) {
-    *a = *a ^ *b;
-    *b = *a ^ *b;
-    *a = *a ^ *b;
+    int t = *a;
+    *a = *b;
+    *b = t;
 }
 
 // Partition the array for quicksort
 int partition(int *array, int left, int right) {
     int pivot = array[right];
-    int i = left;
+    int i = (left - 1);
 
     for (int j = left; j < right; j++) {
         if (array[j] <= pivot) {
-            swap(&array[i], &array[j]);
             i++;
+            swap(&array[i], &array[j]);
         }
     }
-    swap(&array[i], &array[right]);
-    return i;
+    swap(&array[i + 1], &array[right]);
+    return (i + 1);
 }
 
 // Perform quicksort on the array using coroutines
 void quick_sort(int *array, int left, int right, struct my_context *ctx) {
-    int stack[right - left + 1];
-    int top = -1;
-
-    stack[++top] = left;
-    stack[++top] = right;
-
-    while (top >= 0) {
-        right = stack[top--];
-        left = stack[top--];
-
+    if (left < right) {
         int pi = partition(array, left, right);
-
-        if (pi - 1 > left) {
-            stack[++top] = left;
-            stack[++top] = pi - 1;
-        }
-
-        if (pi + 1 < right) {
-            stack[++top] = pi + 1;
-            stack[++top] = right;
-        }
+        quick_sort(array, left, pi - 1, ctx);
+        quick_sort(array, pi + 1, right, ctx);
 
         if (is_exceed(ctx)) {
             stop_timer(ctx);
@@ -192,7 +171,6 @@ static int coroutine_func_f(void *context) {
     return 0;
 }
 
-// Merge the arrays using the indexes
 int merge(int **data, int *size, int *idx, int cnt) {
     int min_idx = -1;
     int curr_min = INT_MAX;
