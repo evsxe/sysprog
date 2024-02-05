@@ -139,11 +139,11 @@ void quick_sort(int *array, int left, int right, struct my_context *ctx) {
 // Coroutine function
 static int coroutine_func_f(void *context) {
     struct coro *this = coro_this();
-    struct my_context *ctx = context;
+    struct my_context *ctx = (struct my_context *) context;
     start_timer(ctx);
 
-    while (*ctx->file_idx != ctx->file_count) {
-        char *filename = ctx->file_list[*ctx->file_idx];
+    while (*(ctx->file_idx) != ctx->file_count) {
+        char *filename = ctx->file_list[*(ctx->file_idx)];
         FILE *in = fopen(filename, "r");
         if (!in) {
             my_context_delete(ctx);
@@ -151,7 +151,7 @@ static int coroutine_func_f(void *context) {
         }
         int size = 0;
         int cap = 100;
-        ctx->arr = malloc(cap * sizeof(int));
+        ctx->arr = (int *) malloc(cap * sizeof(int));
 
         // Read data from the text file
         // Reallocate the array if the capacity has run out
@@ -159,22 +159,22 @@ static int coroutine_func_f(void *context) {
             ++size;
             if (size == cap) {
                 cap *= 2;
-                ctx->arr = realloc(ctx->arr, cap * sizeof(int));
+                ctx->arr = (int *) realloc(ctx->arr, cap * sizeof(int));
             }
         }
 
         // Shrink the array to fit
         cap = size;
-        ctx->arr = realloc(ctx->arr, cap * sizeof(int));
+        ctx->arr = (int *) realloc(ctx->arr, cap * sizeof(int));
 
         fclose(in);
 
         // Store the address of the allocated array and its size
-        ctx->arr_p[*ctx->file_idx] = ctx->arr;
-        ctx->size_p[*ctx->file_idx] = size;
+        ctx->arr_p[*(ctx->file_idx)] = ctx->arr;
+        ctx->size_p[*(ctx->file_idx)] = size;
 
         // Move to the next file
-        (*ctx->file_idx)++;
+        (*(ctx->file_idx))++;
 
         quick_sort(ctx->arr, 0, size - 1, ctx);
     }
@@ -196,12 +196,14 @@ static int coroutine_func_f(void *context) {
 static int merge(int **data, int *size, int *idx, int cnt) {
     int min_idx = -1;
     int curr_min = INT_MAX;
+
     for (int i = 0; i < cnt; ++i) {
-        if ((size[i] > idx[i]) && (data[i][idx[i]] < curr_min)) {
+        if (size[i] > idx[i] && data[i][idx[i]] < curr_min) {
             curr_min = data[i][idx[i]];
             min_idx = i;
         }
     }
+
     return min_idx;
 }
 
