@@ -218,8 +218,7 @@ int main(int argc, char **argv) {
 
     if (!coroutine_count || !file_count) {
         fprintf(stderr, "Incorrect input format.\n"
-                        "\tExample: T N test1.txt test2.txt test3.txt test4.txt test5.txt test6.txt\n"
-                        "\tT - target latency, N - coroutines count\n");
+                        "\tExample: T N test1.txt test2.txt test3.txt test4.txt test5.txt test6.txt\n");
         return 1;
     }
 
