@@ -90,16 +90,17 @@ static void swap(int *a, int *b) {
 // Partition the array for quicksort
 static int partition(int *array, int left, int right) {
     int pivot = array[right];
-    int i = (left - 1);
+    int i = left;
 
     for (int j = left; j < right; j++) {
         if (array[j] <= pivot) {
-            i++;
             swap(&array[i], &array[j]);
+            i++;
         }
     }
-    swap(&array[i + 1], &array[right]);
-    return (i + 1);
+
+    swap(&array[i], &array[right]);
+    return i;
 }
 
 // Perform quicksort on the array using coroutines
