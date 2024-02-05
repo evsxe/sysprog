@@ -82,9 +82,9 @@ static bool is_exceed(struct my_context *ctx) {
 
 // Swap two integers
 static void swap(int *a, int *b) {
-    int t = *a;
+    int temp = *a;
     *a = *b;
-    *b = t;
+    *b = temp;
 }
 
 // Partition the array for quicksort
