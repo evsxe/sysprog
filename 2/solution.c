@@ -1,4 +1,4 @@
-#include "custom_parser.h"
+#include "parser.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -10,14 +10,14 @@
 #include <fcntl.h>
 #include <errno.h>
 
-struct custom_pipes {
+struct pipes {
     bool is_input_pipe;
     bool is_output_pipe;
     int input_fd;
     int output_fd;
 };
 
-char** add_custom_cmd_name_to_args(const struct custom_command *cmd) {
+char** add_cmd_name_to_args(const struct command *cmd) {
     char **temp = malloc(sizeof(char*) * (cmd->arg_count + 2));
     temp[0] = strdup(cmd->exe);
 
@@ -30,18 +30,18 @@ char** add_custom_cmd_name_to_args(const struct custom_command *cmd) {
     return temp;
 }
 
-static void execute_custom_cd(const struct custom_command *cmd) {
+static void execute_cd(const struct command *cmd) {
     assert(cmd != NULL);
     assert(cmd->exe != NULL);
 
     if (strcmp(cmd->exe, "cd") == 0) {
         if (cmd->arg_count == 1) {
             if (chdir(cmd->args[0]) == 0) {
-                printf("Changed directory to: %s\n", cmd->args[0]);
+                printf("Изменена директория на: %s\n", cmd->args[0]);
             }
             else {
                 if (errno == ENOENT) {
-                    fprintf(stderr, "cd: No such file or directory: %s\n", cmd->args[0]);
+                    fprintf(stderr, "cd: нет такого файла или директории: %s\n", cmd->args[0]);
                 }
                 else {
                     perror("chdir");
@@ -50,11 +50,11 @@ static void execute_custom_cd(const struct custom_command *cmd) {
             }
         }
         else if (cmd->arg_count > 1) {
-            fprintf(stderr, "cd: Too many arguments\n");
+            fprintf(stderr, "cd: слишком много аргументов\n");
         }
         else if (cmd->arg_count == 0) {
             if (chdir(getenv("HOME")) == 0) {
-                printf("Changed directory to home\n");
+                printf("Изменена директория на домашнюю\n");
             }
             else {
                 perror("chdir");
@@ -62,18 +62,18 @@ static void execute_custom_cd(const struct custom_command *cmd) {
             }
         }
         else {
-            fprintf(stderr, "cd: Missing arguments\n");
+            fprintf(stderr, "cd: отсутствуют аргументы\n");
         }
     }
 }
 
-static void execute_custom_exit(const struct custom_command *cmd) {
+static void execute_exit(const struct command *cmd) {
     assert(cmd != NULL);
     assert(cmd->exe != NULL);
 
     if (strcmp(cmd->exe, "exit") == 0) {
         if (cmd->arg_count > 1) {
-            fprintf(stderr, "exit: Too many arguments\n");
+            fprintf(stderr, "exit: слишком много аргументов\n");
         }
         else {
             exit(EXIT_SUCCESS);
@@ -81,7 +81,7 @@ static void execute_custom_exit(const struct custom_command *cmd) {
     }
 }
 
-static void execute_custom_command(const struct custom_command *cmd) {
+static void execute_command(const struct command *cmd) {
     pid_t pid = fork();
 
     if (pid == -1) {
@@ -90,11 +90,11 @@ static void execute_custom_command(const struct custom_command *cmd) {
     }
     else if (pid == 0) {
         if (cmd->exe == NULL) {
-            fprintf(stderr, "execute_command: Missing executable name\n");
+            fprintf(stderr, "execute_command: отсутствует имя исполняемого файла\n");
             exit(EXIT_FAILURE);
         }
 
-        char** args = add_custom_cmd_name_to_args(cmd);
+        char** args = add_cmd_name_to_args(cmd);
 
         if (execvp(cmd->exe, args) == -1) {
             perror("execvp");
@@ -113,21 +113,20 @@ static void execute_custom_command(const struct custom_command *cmd) {
     }
 }
 
-static void
-execute_custom_command_line(const struct custom_command_line *line) {
+static void execute_command_line(const struct command_line *line) {
     assert(line != NULL);
-    const struct custom_expr *e = line->head;
+    const struct expr *e = line->head;
     int pipefd[2], lastfd = -1;
 
     if (e != NULL && e->type == EXPR_TYPE_COMMAND &&
         strcmp(e->cmd.exe, "cd") == 0 && e->next == NULL) {
-        execute_custom_cd(&e->cmd);
+        execute_cd(&e->cmd);
         return;
     }
 
     if (e != NULL && e->type == EXPR_TYPE_COMMAND &&
         strcmp(e->cmd.exe, "exit") == 0 && e->next == NULL) {
-        execute_custom_exit(&e->cmd);
+        execute_exit(&e->cmd);
         return;
     }
 
@@ -168,9 +167,8 @@ execute_custom_command_line(const struct custom_command_line *line) {
                         close(outfd);
                     }
                 }
-                execute_custom_command(&e->cmd);
-            }
-            else {
+                execute_command(&e->cmd);
+            } else {
                 if (lastfd != -1) {
                     close(lastfd);
                 }
@@ -201,23 +199,23 @@ int main(void) {
     const size_t buf_size = 1024;
     char buf[buf_size];
     int rc;
-    struct custom_parser *p = custom_parser_new();
+    struct parser *p = parser_new();
 
     while ((rc = read(STDIN_FILENO, buf, buf_size)) > 0) {
-        custom_parser_feed(p, buf, rc);
-        struct custom_command_line *line = NULL;
+        parser_feed(p, buf, rc);
+        struct command_line *line = NULL;
         while (true) {
-            enum custom_parser_error err = custom_parser_pop_next(p, &line);
+            enum parser_error err = parser_pop_next(p, &line);
             if (err == PARSER_ERR_NONE && line == NULL)
                 break;
             if (err != PARSER_ERR_NONE) {
-                printf("Error: %d\n", (int)err);
+                printf("Ошибка: %d\n", (int)err);
                 continue;
             }
-            execute_custom_command_line(line);
-            custom_command_line_delete(line);
+            execute_command_line(line);
+            command_line_delete(line);
         }
     }
-    custom_parser_delete(p);
+    parser_delete(p);
     return 0;
 }
