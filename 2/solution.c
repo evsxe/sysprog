@@ -37,32 +37,20 @@ static void execute_cd(const struct command *cmd) {
     if (strcmp(cmd->exe, "cd") == 0) {
         if (cmd->arg_count == 1) {
             if (chdir(cmd->args[0]) == 0) {
-                printf("Изменена директория на: %s\n", cmd->args[0]);
-            }
-            else {
-                if (errno == ENOENT) {
-                    fprintf(stderr, "cd: нет такого файла или директории: %s\n", cmd->args[0]);
-                }
-                else {
-                    perror("chdir");
-                    exit(EXIT_FAILURE);
-                }
-            }
-        }
-        else if (cmd->arg_count > 1) {
-            fprintf(stderr, "cd: слишком много аргументов\n");
-        }
-        else if (cmd->arg_count == 0) {
-            if (chdir(getenv("HOME")) == 0) {
-                printf("Изменена директория на домашнюю\n");
-            }
-            else {
+                printf("Changed directory to: %s\n", cmd->args[0]);
+            } else {
                 perror("chdir");
                 exit(EXIT_FAILURE);
             }
-        }
-        else {
-            fprintf(stderr, "cd: отсутствуют аргументы\n");
+        } else if (cmd->arg_count > 1) {
+            fprintf(stderr, "cd: too many arguments\n");
+        } else {
+            if (chdir(getenv("HOME")) == 0) {
+                printf("Changed directory to home\n");
+            } else {
+                perror("chdir");
+                exit(EXIT_FAILURE);
+            }
         }
     }
 }
@@ -73,9 +61,9 @@ static void execute_exit(const struct command *cmd) {
 
     if (strcmp(cmd->exe, "exit") == 0) {
         if (cmd->arg_count > 1) {
-            fprintf(stderr, "exit: слишком много аргументов\n");
-        }
-        else {
+            fprintf(stderr, "exit: too many arguments\n");
+        } else {
+            printf("Exiting the program\n");
             exit(EXIT_SUCCESS);
         }
     }
@@ -87,10 +75,9 @@ static void execute_command(const struct command *cmd) {
     if (pid == -1) {
         perror("fork");
         exit(EXIT_FAILURE);
-    }
-    else if (pid == 0) {
+    } else if (pid == 0) {
         if (cmd->exe == NULL) {
-            fprintf(stderr, "execute_command: отсутствует имя исполняемого файла\n");
+            fprintf(stderr, "execute_command_updated: missing executable name\n");
             exit(EXIT_FAILURE);
         }
 
@@ -100,11 +87,8 @@ static void execute_command(const struct command *cmd) {
             perror("execvp");
             exit(EXIT_FAILURE);
         }
-        else {
-            exit(EXIT_SUCCESS);
-        }
-    }
-    else {
+        exit(EXIT_SUCCESS);
+    } else {
         int status;
         if (waitpid(pid, &status, 0) == -1) {
             perror("waitpid");
@@ -198,24 +182,32 @@ static void execute_command_line(const struct command_line *line) {
 int main(void) {
     const size_t buf_size = 1024;
     char buf[buf_size];
-    int rc;
     struct parser *p = parser_new();
 
-    while ((rc = read(STDIN_FILENO, buf, buf_size)) > 0) {
+    while (true) {
+        ssize_t rc = read(STDIN_FILENO, buf, buf_size);
+        if (rc < 0) {
+            perror("Error reading from stdin");
+            break;
+        } else if (rc == 0) {
+            break;
+        }
+
         parser_feed(p, buf, rc);
         struct command_line *line = NULL;
-        while (true) {
+        while (1) {
             enum parser_error err = parser_pop_next(p, &line);
             if (err == PARSER_ERR_NONE && line == NULL)
                 break;
             if (err != PARSER_ERR_NONE) {
-                printf("Ошибка: %d\n", (int)err);
+                fprintf(stderr, "Error: %d\n", (int)err);
                 continue;
             }
             execute_command_line(line);
             command_line_delete(line);
         }
     }
+
     parser_delete(p);
     return 0;
 }
