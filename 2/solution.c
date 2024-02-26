@@ -97,6 +97,55 @@ static void execute_command(const struct command *cmd) {
     }
 }
 
+void execute_single_command(const struct expr *e, int lastfd, int pipefd[], const struct command_line *line) {
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("FORK");
+        exit(EXIT_FAILURE);
+    }
+    else if (pid == 0) {
+        if (lastfd != -1) {
+            dup2(lastfd, STDIN_FILENO);
+            close(lastfd);
+        }
+
+        int outfd = STDOUT_FILENO;
+        if (e->next == NULL || e->next->type != EXPR_TYPE_PIPE) {
+            if (line->out_type == OUTPUT_TYPE_FILE_NEW) {
+                outfd = open(line->out_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            }
+            else if (line->out_type == OUTPUT_TYPE_FILE_APPEND) {
+                outfd = open(line->out_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
+            }
+            if (outfd == -1) {
+                perror("open");
+                exit(EXIT_FAILURE);
+            }
+            dup2(outfd, STDOUT_FILENO);
+            if (outfd != STDOUT_FILENO) {
+                close(outfd);
+            }
+        }
+        execute_command(&e->cmd);
+    } else {
+        if (lastfd != -1) {
+            close(lastfd);
+        }
+        if (e->next && e->next->type == EXPR_TYPE_PIPE) {
+            lastfd = pipefd[0];
+            close(pipefd[1]);
+        }
+        else {
+            lastfd = -1;
+        }
+        int status;
+        if (waitpid(pid, &status, 0) == -1) {
+            perror("waitpid");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
 static void execute_command_line(const struct command_line *line) {
     assert(line != NULL);
     const struct expr *e = line->head;
@@ -123,59 +172,10 @@ static void execute_command_line(const struct command_line *line) {
                 }
             }
 
-            pid_t pid = fork();
-            if (pid == -1) {
-                perror("FORK");
-                exit(EXIT_FAILURE);
-            }
-            else if (pid == 0) {
-                if (lastfd != -1) {
-                    dup2(lastfd, STDIN_FILENO);
-                    close(lastfd);
-                }
-
-                int outfd = STDOUT_FILENO;
-                if (e->next == NULL || e->next->type != EXPR_TYPE_PIPE) {
-                    if (line->out_type == OUTPUT_TYPE_FILE_NEW) {
-                        outfd = open(line->out_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                    }
-                    else if (line->out_type == OUTPUT_TYPE_FILE_APPEND) {
-                        outfd = open(line->out_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
-                    }
-                    if (outfd == -1) {
-                        perror("open");
-                        exit(EXIT_FAILURE);
-                    }
-                    dup2(outfd, STDOUT_FILENO);
-                    if (outfd != STDOUT_FILENO) {
-                        close(outfd);
-                    }
-                }
-                execute_command(&e->cmd);
-            } else {
-                if (lastfd != -1) {
-                    close(lastfd);
-                }
-                if (e->next && e->next->type == EXPR_TYPE_PIPE) {
-                    lastfd = pipefd[0];
-                    close(pipefd[1]);
-                }
-                else {
-                    lastfd = -1;
-                }
-                int status;
-                if (waitpid(pid, &status, 0) == -1) {
-                    perror("waitpid");
-                    exit(EXIT_FAILURE);
-                }
-            }
+            execute_single_command(e, lastfd, pipefd, line);
         }
 
         e = e->next;
-
-        if (lastfd != -1) {
-            close(lastfd);
-        }
     }
 }
 
