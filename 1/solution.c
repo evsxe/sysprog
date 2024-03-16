@@ -19,12 +19,11 @@ struct my_context {
     int nsec_finish;
     int sec_total;
     int nsec_total;
-    int nsec_limit;
 };
 
 // Allocate and initialize the context object
 static struct my_context *my_context_new(const char *name, char **file_list, int file_count,
-                                         int *idx, int **data_p, int *size_p, int limit) {
+                                         int *idx, int **data_p, int *size_p) {
     struct my_context *ctx = malloc(sizeof(*ctx));
     ctx->name = strdup(name);
     ctx->file_list = file_list;
@@ -32,7 +31,6 @@ static struct my_context *my_context_new(const char *name, char **file_list, int
     ctx->file_count = file_count;
     ctx->arr_p = data_p;
     ctx->size_p = size_p;
-    ctx->nsec_limit = limit;
     return ctx;
 }
 
@@ -69,15 +67,7 @@ static void calculate_time(struct my_context *ctx) {
     }
 
     ctx->sec_total = diff_sec;
-    ctx->nsec_total = diff_nsec;
-}
-
-// Check if the runtime for the context is exceeded
-static bool is_exceed(struct my_context *ctx) {
-    stop_timer(ctx);
-    int current_quant = (ctx->sec_finish - ctx->sec_start) * 1000000000 +
-                        (ctx->nsec_finish - ctx->nsec_start);
-    return current_quant > ctx->nsec_limit;
+    ctx->nsec_total += diff_nsec;
 }
 
 // Swap two integers
@@ -127,12 +117,10 @@ void quick_sort(int *array, int left, int right, struct my_context *ctx) {
             stack[++top] = right;
         }
 
-        if (is_exceed(ctx)) {
-            stop_timer(ctx);
-            calculate_time(ctx);
-            coro_yield();
-            start_timer(ctx);
-        }
+        stop_timer(ctx);
+        calculate_time(ctx);
+        coro_yield();
+        start_timer(ctx);
     }
 }
 
@@ -213,12 +201,12 @@ int main(int argc, char **argv) {
 
     coro_sched_init();
 
-    int file_count = argc - 3;
-    int coroutine_count = atoi(argv[2]);
+    int file_count = argc - 2;
+    int coroutine_count = atoi(argv[1]);
 
     if (!coroutine_count || !file_count) {
         fprintf(stderr, "Incorrect input format.\n"
-                        "\tExample: T N test1.txt test2.txt test3.txt test4.txt test5.txt test6.txt\n");
+                        "\tExample: N test1.txt test2.txt test3.txt test4.txt test5.txt test6.txt\n");
         return 1;
     }
 
@@ -230,8 +218,7 @@ int main(int argc, char **argv) {
         char name[16];
         snprintf(name, sizeof(name), "coro_%d", i);
         coro_new(coroutine_func_f,
-                 my_context_new(name, argv + 3, file_count, &file_idx, p, s,
-                                atoi(argv[1]) * 1000 / file_count));
+                 my_context_new(name, argv + 2, file_count, &file_idx, p, s));
     }
     struct coro *c;
     while ((c = coro_sched_wait()) != NULL) {
