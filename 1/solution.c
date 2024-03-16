@@ -77,23 +77,7 @@ static void swap(int *a, int *b) {
     *b = temp;
 }
 
-// Partition the array for quicksort
-static int partition(int *array, int left, int right) {
-    int pivot = array[right];
-    int i = left;
-
-    for (int j = left; j < right; j++) {
-        if (array[j] <= pivot) {
-            swap(&array[i], &array[j]);
-            i++;
-        }
-    }
-
-    swap(&array[i], &array[right]);
-    return i;
-}
-
-// Perform quicksort on the array using coroutines
+// Perform quicksort on the array using coroutines without a separate partition function
 void quick_sort(int *array, int left, int right, struct my_context *ctx) {
     int stack[right - left + 1];
     int top = -1;
@@ -105,7 +89,18 @@ void quick_sort(int *array, int left, int right, struct my_context *ctx) {
         right = stack[top--];
         left = stack[top--];
 
-        int pi = partition(array, left, right);
+        int pivot = array[right];
+        int i = left;
+
+        for (int j = left; j < right; j++) {
+            if (array[j] <= pivot) {
+                swap(&array[i], &array[j]);
+                i++;
+            }
+        }
+
+        swap(&array[i], &array[right]);
+        int pi = i;
 
         if (pi - 1 > left) {
             stack[++top] = left;
