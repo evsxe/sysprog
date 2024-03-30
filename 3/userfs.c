@@ -347,12 +347,10 @@ int ufs_close(int fd) {
 int ufs_delete(const char *filename) {
     struct file *file = file_find(filename);
 
-    if (file == NULL) {
-        return 0;
+    if (file != NULL) {
+        file->is_del = 1;
+        file_delete(file);
     }
-
-    file->is_del = 1;
-    file_delete(file);
 
     return 0;
 }
