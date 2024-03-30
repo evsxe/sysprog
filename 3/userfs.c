@@ -70,7 +70,7 @@ ufs_errno() {
 	return ufs_error_code;
 }
 
-int get_free_fd_adress() {
+int get_free_fd_address() {
     if (file_descriptor_capacity == 0) {
         file_descriptor_capacity = 1;
         file_descriptors = malloc(sizeof(struct filedesc *) * file_descriptor_capacity);
@@ -78,9 +78,11 @@ int get_free_fd_adress() {
             ufs_error_code = UFS_ERR_NO_MEM;
             return -1;
         }
+        file_descriptor_count = 0;
     }
 
-    if (file_descriptor_count == file_descriptor_capacity) {
+    int free_fd = file_descriptor_count;
+    if (free_fd == file_descriptor_capacity) {
         int new_capacity = file_descriptor_capacity * 2;
         struct filedesc **new_descriptors = realloc(file_descriptors, sizeof(struct filedesc *) * new_capacity);
         if (new_descriptors == NULL) {
@@ -93,14 +95,8 @@ int get_free_fd_adress() {
         file_descriptor_capacity = new_capacity;
     }
 
-    for (int i = 0; i < file_descriptor_capacity; i++) {
-        if (file_descriptors[i] == NULL) {
-            file_descriptor_count++;
-            return i;
-        }
-    }
-
-    return -1;
+    file_descriptor_count++;
+    return free_fd;
 }
 
 struct file *file_find(const char *filename) {
@@ -115,37 +111,30 @@ struct file *file_find(const char *filename) {
 }
 
 struct file *file_create(const char *filename) {
-	struct file *file = malloc(sizeof(struct file));
-	if (file == NULL) {
-		ufs_error_code = UFS_ERR_NO_MEM;
-		return NULL;
-	}
+    struct file *file = malloc(sizeof(struct file));
+    if (file == NULL) {
+        ufs_error_code = UFS_ERR_NO_MEM;
+        return NULL;
+    }
 
-	file->block_list = NULL;
-	file->last_block = NULL;
-	file->name = strdup(filename);
-	file->next = NULL;
-	file->prev = NULL;
-	file->refs = 0;
-	file->is_del = 0;
+    file->block_list = NULL;
+    file->last_block = NULL;
+    file->name = strdup(filename);
+    file->next = file_list;
+    file->prev = NULL;
+    file->refs = 0;
+    file->is_del = 0;
 
-	if (file_list == NULL) {
-		file_list = file;
-		return file;
-	}
+    if (file_list != NULL) {
+        file_list->prev = file;
+    }
+    file_list = file;
 
-	file->next = file_list;
-	file->prev = file_list->prev;
-
-	if (file_list->prev != NULL)
-		file_list->prev->next = file;
-	file_list->prev = file;
-
-	return file;
+    return file;
 }
 
 int ufs_open(const char *filename, int flags) {
-    int fd = get_free_fd_adress();
+    int fd = get_free_fd_address();
     if (fd == -1) {
         ufs_error_code = UFS_ERR_INTERNAL;
         return -1;
@@ -153,13 +142,13 @@ int ufs_open(const char *filename, int flags) {
 
     struct file *file = file_find(filename);
     if (file == NULL || file->is_del) {
-        if (flags & UFS_CREATE) {
-            file = file_create(filename);
-            if (file == NULL) {
-                return -1;
-            }
-        } else {
+        if (!(flags & UFS_CREATE)) {
             ufs_error_code = UFS_ERR_NO_FILE;
+            return -1;
+        }
+
+        file = file_create(filename);
+        if (file == NULL) {
             return -1;
         }
     }
@@ -173,13 +162,9 @@ int ufs_open(const char *filename, int flags) {
     file_descriptors[fd]->pos = 0;
     file->refs++;
 
-    if (flags & UFS_READ_ONLY) {
-        file_descriptors[fd]->flags = UFS_READ_ONLY;
-    } else if (flags & UFS_WRITE_ONLY) {
-        file_descriptors[fd]->flags = UFS_WRITE_ONLY;
-    } else {
-        file_descriptors[fd]->flags = UFS_READ_WRITE;
-    }
+    file_descriptors[fd]->flags =
+            (flags & UFS_READ_ONLY) ? UFS_READ_ONLY : ((flags & UFS_WRITE_ONLY) ? UFS_WRITE_ONLY : UFS_READ_WRITE);
+
 
     file_descriptors[fd]->file = file;
 
@@ -196,38 +181,28 @@ int max(int a, int b) {
 }
 
 int file_write(struct file *file, const char *buf, size_t size, int pos) {
-    struct block *block = file->block_list;
+    struct block **current_block = &file->block_list;
 
-    while (pos > BLOCK_SIZE && block != NULL) {
+    while (pos > BLOCK_SIZE && *current_block != NULL) {
         pos -= BLOCK_SIZE;
-        block = block->next;
+        current_block = &(*current_block)->next;
     }
 
     while (size > 0) {
-        if (block == NULL) {
-            block = malloc(sizeof(struct block));
-            block->memory = malloc(BLOCK_SIZE);
-            block->occupied = 0;
-            block->next = NULL;
-
-            if (file->block_list == NULL) {
-                file->block_list = block;
-            } else {
-                struct block *last_block = file->block_list;
-                while (last_block->next != NULL) {
-                    last_block = last_block->next;
-                }
-                last_block->next = block;
-            }
+        if (*current_block == NULL) {
+            *current_block = malloc(sizeof(struct block));
+            (*current_block)->memory = malloc(BLOCK_SIZE);
+            (*current_block)->occupied = 0;
+            (*current_block)->next = NULL;
         }
 
         int to_copy = min(BLOCK_SIZE - pos, size);
-        memcpy(block->memory + pos, buf, to_copy);
-        block->occupied = max(pos + to_copy, block->occupied);
+        memcpy((*current_block)->memory + pos, buf, to_copy);
+        (*current_block)->occupied = max(pos + to_copy, (*current_block)->occupied);
         size -= to_copy;
         buf += to_copy;
         pos = 0;
-        block = block->next;
+        current_block = &(*current_block)->next;
     }
 
     return size;
