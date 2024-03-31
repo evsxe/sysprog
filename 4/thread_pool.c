@@ -191,10 +191,7 @@ int thread_task_timed_join(struct thread_task *task, double timeout, void **resu
             abs_timeout.tv_nsec -= 1000000000;
         }
 
-        int condition = 0;
-        while (!task->finished && condition != ETIMEDOUT) {
-            condition = pthread_cond_timedwait(&task->cond, &task->mutex, &abs_timeout);
-        }
+        int condition = pthread_cond_timedwait(&task->cond, &task->mutex, &abs_timeout);
 
         if (condition == ETIMEDOUT) {
             pthread_mutex_unlock(&task->mutex);
